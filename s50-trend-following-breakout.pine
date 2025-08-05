@@ -1,0 +1,79 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © lumduan
+//@version=6
+
+// For S50 TFEX Strategy Timeframe 30 minutes 
+import candythink/MonthlyProfitTable/5 as MonthlyProfitTable   	
+
+// ————— Constants
+float RISK_FREE_RATE = 2.0 // Risk-free rate for calculating Sharpe ratio
+HIGH_PRICE_BAR_COLOR = color.green
+LOW_PRICE_BAR_COLOR = color.red
+int HIGH_PRICE_BAR_WIDTH = 1
+int LOW_PRICE_BAR_WIDTH = 1
+
+int CONTACT_PER_ORDER = 1
+float COMMISSION_PRICE = 85.0 //THB
+
+// Inputs for configuring the pivot point calculation
+int leftBars  = input(21) // Number of bars to the left for pivot calculation
+int rightBars = input(2) // Number of bars to the right for pivot calculation
+int riskPercent = input(1, title="Risk % per Trade") / 100
+int atrLength = input(10, title="ATR Length")
+int riskRewardRatio = input(8, title="Risk-Reward Ratio")
+int prec      = input(2, title = "Return Precision") // Precision of return percentages
+bool show_table = input.bool(defval = true, title = "Show Return Rate Table On/Off") // Show or hide the table
+
+strategy(title = "S50 TFEX Strategy With ATR",overlay = true, calc_on_every_tick = true, default_qty_type = strategy.fixed, default_qty_value = CONTACT_PER_ORDER, commission_type = strategy.commission.cash_per_contract, commission_value = COMMISSION_PRICE , risk_free_rate = RISK_FREE_RATE)
+
+// ATR Calculation
+atr = ta.atr(atrLength)
+
+// Account Equity & Risk Per Trade
+strategy_equity = strategy.equity
+riskAmount = strategy_equity * riskPercent
+
+// swing
+swingHigh = ta.pivothigh(leftBars,rightBars)
+swingLow = ta.pivotlow(leftBars,rightBars)
+
+// Initialize high and low price variables
+float highPrice = 0.0
+highPrice := not na(swingHigh) ? swingHigh : highPrice[1] // Update high price if a new swing high is detected, else carry forward previous value
+
+float lowPrice = 0.0
+lowPrice := not na(swingLow) ? swingLow : lowPrice[1] // Update low price if a new swing low is detected, else carry forward previous value
+
+// Stop-Loss and Take-Profit Calculation
+longStop = swingLow - atr
+shortStop = swingHigh + atr
+
+longTakeProfit = swingHigh + atr * riskRewardRatio
+shortTakeProfit = swingLow - atr * riskRewardRatio
+
+// Position Sizing: Contracts based on risk
+longContracts = riskAmount / (swingHigh - longStop)
+shortContracts = riskAmount / (shortStop - swingLow)
+
+// Long Entry
+if not na(swingHigh)
+    strategy.entry("Long", strategy.long, qty=longContracts, stop=swingHigh + syminfo.mintick, comment = "Long")
+    strategy.exit("Long Exit", from_entry="Long", stop=longStop, limit=longTakeProfit, comment = "Short")
+
+// Short Entry
+if not na(swingLow)
+    strategy.entry("Short", strategy.short, qty=shortContracts, stop=swingLow - syminfo.mintick, comment = "Short")
+    strategy.exit("Short Exit", from_entry="Short", stop=shortStop, limit=shortTakeProfit, comment = "Long")
+
+// Plot high and low prices on the chart
+plot(highPrice, color = HIGH_PRICE_BAR_COLOR, linewidth = HIGH_PRICE_BAR_WIDTH)
+plot(lowPrice, color = LOW_PRICE_BAR_COLOR,   linewidth = LOW_PRICE_BAR_WIDTH)
+
+// Plot Take Profit
+plot(highPrice+atr * riskRewardRatio, title="Long Take-Profit", color=color.rgb(0, 240, 164, 50), linewidth=1, style=plot.style_stepline)
+plot(lowPrice-atr * riskRewardRatio, title="Short Take-Profit", color=color.rgb(0, 240, 164, 50), linewidth=1, style=plot.style_stepline)
+
+
+// ======= TABLE =====
+float equity = strategy.equity
+MonthlyProfitTable.ProfitTable(equity)
