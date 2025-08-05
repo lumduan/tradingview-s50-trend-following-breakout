@@ -80,12 +80,12 @@ longContracts = not na(entryHigh) and not na(longStop) ? riskAmount / (entryHigh
 shortContracts = not na(entryLow) and not na(shortStop) ? riskAmount / (shortStop - entryLow) : 0
 
 // Long Entry
-if isLongSignal and not na(entryHigh) and longContracts > 0
+if isLongSignal
     strategy.entry("Long", strategy.long, qty=longContracts, stop=entryHigh + syminfo.mintick, comment = "Long")
     strategy.exit("Long Exit", from_entry="Long", stop=longStop, limit=longTakeProfit, comment = "Long Exit")
 
 // Short Entry
-if isShortSignal and not na(entryLow) and shortContracts > 0
+if isShortSignal
     strategy.entry("Short", strategy.short, qty=shortContracts, stop=entryLow - syminfo.mintick, comment = "Short")
     strategy.exit("Short Exit", from_entry="Short", stop=shortStop, limit=shortTakeProfit, comment = "Short Exit")
 
