@@ -33,40 +33,40 @@ strategy_equity = strategy.equity
 riskAmount = strategy_equity * riskPercent
 
 // Bar 21 Extreme Detection Logic
-// Look back over the last 23 bars ending at bar 3 ago (i.e., close[3] to close[25])
+// Check if bar 21 close is highest/lowest from close in 23 bars
 isLongSignal = false
 isShortSignal = false
 
-if bar_index >= 25 // Ensure we have enough historical data
-    // Check if close[3] is the highest among close[3] to close[25]
-    highestClose = close[3]
-    for i = 4 to 25
+if bar_index >= 22 // Ensure we have enough historical data (need bars 0-22)
+    // Check if close[21] is the highest among 23 closes (close[0] to close[22])
+    highestClose = close[21]
+    for i = 0 to 22
         if close[i] > highestClose
             highestClose := close[i]
-    isLongSignal := close[3] == highestClose
+    isLongSignal := close[21] == highestClose
     
-    // Check if close[3] is the lowest among close[3] to close[25]
-    lowestClose = close[3]
-    for i = 4 to 25
+    // Check if close[21] is the lowest among 23 closes (close[0] to close[22])
+    lowestClose = close[21]
+    for i = 0 to 22
         if close[i] < lowestClose
             lowestClose := close[i]
-    isShortSignal := close[3] == lowestClose
+    isShortSignal := close[21] == lowestClose
 
 // Track entry prices for stop/take profit calculations
 var float entryHigh = na
 var float entryLow = na
 
 if isLongSignal
-    entryHigh := high[3]
+    entryHigh := high[21]
 if isShortSignal
-    entryLow := low[3]
+    entryLow := low[21]
 
 // Initialize high and low price variables for plotting
 float highPrice = 0.0
-highPrice := isLongSignal ? high[3] : highPrice[1] // Update high price if a long signal is detected
+highPrice := isLongSignal ? high[21] : highPrice[1] // Update high price if a long signal is detected
 
 float lowPrice = 0.0
-lowPrice := isShortSignal ? low[3] : lowPrice[1] // Update low price if a short signal is detected
+lowPrice := isShortSignal ? low[21] : lowPrice[1] // Update low price if a short signal is detected
 
 // Stop-Loss and Take-Profit Calculation
 longStop = not na(entryLow) ? entryLow - atr : na
