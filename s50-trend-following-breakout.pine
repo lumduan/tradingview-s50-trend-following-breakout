@@ -15,99 +15,68 @@ int LOW_PRICE_BAR_WIDTH = 1
 int CONTACT_PER_ORDER = 1
 float COMMISSION_PRICE = 85.0 //THB
 
-// Inputs for configuring the bar extreme calculation
-int lookback_bars = input(21, title="Lookback Bars") // Number of bars to look back for extreme detection
-int confirm_bars = input(2, title="Confirmation Bars") // Number of bars for confirmation
-int risk_percent = input(1, title="Risk % per Trade") / 100
-int atr_length = input(10, title="ATR Length")
-int risk_reward_ratio = input(8, title="Risk-Reward Ratio")
+// Inputs for configuring the pivot point calculation
+int leftBars  = input(21) // Number of bars to the left for pivot calculation
+int rightBars = input(2) // Number of bars to the right for pivot calculation
+int riskPercent = input(1, title="Risk % per Trade") / 100
+int atrLength = input(10, title="ATR Length")
+int riskRewardRatio = input(8, title="Risk-Reward Ratio")
+int prec      = input(2, title = "Return Precision") // Precision of return percentages
 bool show_table = input.bool(defval = true, title = "Show Return Rate Table On/Off") // Show or hide the table
 
-strategy(title = "S50 Trend Following Breakout",overlay = true, calc_on_every_tick = true, default_qty_type = strategy.fixed, default_qty_value = CONTACT_PER_ORDER, commission_type = strategy.commission.cash_per_contract, commission_value = COMMISSION_PRICE , risk_free_rate = RISK_FREE_RATE)
+strategy(title = "S50 TFEX Strategy With ATR",overlay = true, calc_on_every_tick = true, default_qty_type = strategy.fixed, default_qty_value = CONTACT_PER_ORDER, commission_type = strategy.commission.cash_per_contract, commission_value = COMMISSION_PRICE , risk_free_rate = RISK_FREE_RATE)
 
 // ATR Calculation
-atr = ta.atr(atr_length)
+atr = ta.atr(atrLength)
 
 // Account Equity & Risk Per Trade
 strategy_equity = strategy.equity
-risk_amount = strategy_equity * risk_percent
+riskAmount = strategy_equity * riskPercent
 
-// Swing High/Low for plotting
-swing_high = ta.pivothigh(lookback_bars,confirm_bars)
-swing_low = ta.pivotlow(lookback_bars,confirm_bars)
+// swing
+swingHigh = ta.pivothigh(leftBars,rightBars)
+swingLow = ta.pivotlow(leftBars,rightBars)
 
-// Detection Logic
-// Check if lastest bar in lookback_bars close price is highest/lowest and confirm with the next confirm_bars value 
-is_long_signal = false
-is_short_signal = false
+// Track the most recent swing high and low prices
+var float highPrice = na
+var float lowPrice = na
 
-if bar_index >= lookback_bars + confirm_bars // Ensure we have enough historical data (need bars for lookback and confirmation)
-    // Check if close[lookback_bars - 1] is the highest among lookback_bars + confirm_bars closes (close[0] to close[lookback_bars + confirm_bars - 1])
-    highest_close = close[lookback_bars]
-    for i = 0 to confirm_bars - 1
-        if close[i] > highest_close
-            highest_close := close[i]
-    is_long_signal := close[lookback_bars - 1] == highest_close
-    is_short_signal := false // Reset short signal if long signal is detected
-    // Check if close[lookback_bars - 1] is the lowest among lookback_bars + confirm_bars closes (close[0] to close[lookback_bars + confirm_bars - 1])
-    if not is_long_signal // Only check for short signal if no long signal is detected
-        is_short_signal := false // Reset long signal if short signal is detected
-        lowest_close = close[lookback_bars]
-        for i = 0 to confirm_bars - 1
-            if close[i] < lowest_close
-                lowest_close := close[i]
-        is_short_signal := close[lookback_bars - 1] == lowest_close 
+// Update highPrice when a new swing high is detected
+if not na(swingHigh)
+    highPrice := swingHigh
 
-    // If both signals are false, we can reset them
-    if not is_long_signal and not is_short_signal
-        is_long_signal := false
-        is_short_signal := false    
-        
+// Update lowPrice when a new swing low is detected  
+if not na(swingLow)
+    lowPrice := lowPrice
 
-// Track entry prices for stop/take profit calculations
-var float entry_high = na
-var float entry_low = na
+// Stop-Loss and Take-Profit Calculation
+longStop = swingLow - atr
+shortStop = swingHigh + atr
 
-if is_long_signal
-    entry_high := swing_high
-if is_short_signal
-    entry_low := swing_low
-
-// Initialize high and low price variables for plotting
-float high_price = 0.0
-high_price := is_long_signal ? swing_high : high_price[1] // Update high price if a long signal is detected
-
-float low_price = 0.0
-low_price := is_short_signal ? swing_low : low_price[1] // Update low price if a short signal is detected
-
-// Stop-Loss and Take-Profit Calculation  
-long_stop = not na(entry_low) ? entry_low - atr : na
-short_stop = not na(entry_high) ? entry_high + atr : na
-
-long_take_profit = not na(entry_high) ? entry_high + atr * risk_reward_ratio : na
-short_take_profit = not na(entry_low) ? entry_low - atr * risk_reward_ratio : na
+longTakeProfit = swingHigh + atr * riskRewardRatio
+shortTakeProfit = swingLow - atr * riskRewardRatio
 
 // Position Sizing: Contracts based on risk
-long_contracts = not na(entry_high) and not na(entry_low) ? risk_amount / (entry_high - (entry_low - atr)) : 0
-short_contracts = not na(entry_low) and not na(entry_high) ? risk_amount / ((entry_high + atr) - entry_low) : 0
+longContracts = riskAmount / (swingHigh - longStop)
+shortContracts = riskAmount / (shortStop - swingLow)
 
 // Long Entry
-if is_long_signal and not na(swing_high) and not na(swing_low)
-    strategy.entry("Long", strategy.long, qty=long_contracts, stop=swing_high + syminfo.mintick, comment = "Long")
-    strategy.exit("Long Exit", from_entry="Long", stop=long_stop, limit=long_take_profit, comment = "Long Exit")
+if not na(swingHigh)
+    strategy.entry("Long", strategy.long, qty=longContracts, stop=swingHigh + syminfo.mintick, comment = "Long")
+    strategy.exit("Long Exit", from_entry="Long", stop=longStop, limit=longTakeProfit, comment = "Short")
 
 // Short Entry
-if is_short_signal and not na(swing_low) and not na(swing_high)
-    strategy.entry("Short", strategy.short, qty=short_contracts, stop=swing_low - syminfo.mintick, comment = "Short")
-    strategy.exit("Short Exit", from_entry="Short", stop=short_stop, limit=short_take_profit, comment = "Short Exit")
+if not na(swingLow)
+    strategy.entry("Short", strategy.short, qty=shortContracts, stop=swingLow - syminfo.mintick, comment = "Short")
+    strategy.exit("Short Exit", from_entry="Short", stop=shortStop, limit=shortTakeProfit, comment = "Long")
 
 // Plot high and low prices on the chart
-plot(high_price, color = HIGH_PRICE_BAR_COLOR, linewidth = HIGH_PRICE_BAR_WIDTH)
-plot(low_price, color = LOW_PRICE_BAR_COLOR,   linewidth = LOW_PRICE_BAR_WIDTH)
+plot(highPrice, color = HIGH_PRICE_BAR_COLOR, linewidth = HIGH_PRICE_BAR_WIDTH)
+plot(lowPrice, color = LOW_PRICE_BAR_COLOR,   linewidth = LOW_PRICE_BAR_WIDTH)
 
 // Plot Take Profit
-// plot(not na(long_take_profit) ? long_take_profit : na, title="Long Take-Profit", color=color.rgb(0, 240, 164, 50), linewidth=1, style=plot.style_stepline)
-// plot(not na(short_take_profit) ? short_take_profit : na, title="Short Take-Profit", color=color.rgb(0, 240, 164, 50), linewidth=1, style=plot.style_stepline)
+plot(highPrice+atr * riskRewardRatio, title="Long Take-Profit", color=color.rgb(0, 240, 164, 50), linewidth=1, style=plot.style_stepline)
+plot(lowPrice-atr * riskRewardRatio, title="Short Take-Profit", color=color.rgb(0, 240, 164, 50), linewidth=1, style=plot.style_stepline)
 
 
 // ======= TABLE =====
