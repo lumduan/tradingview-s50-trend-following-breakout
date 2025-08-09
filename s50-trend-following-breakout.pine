@@ -68,13 +68,13 @@ is_short := low[0] < low_price
 
 // Long Entry with ADX filter
 // if not na(swing_high)
-if is_long and adx > adx_threshold
+if is_long //and adx > adx_threshold
     strategy.entry("Long", strategy.long, qty=long_contracts, stop=swing_high + syminfo.mintick, comment = "Long")
     strategy.exit("Long Exit", from_entry="Long", stop=long_stop, limit=long_take_profit, comment = "Short")
 
 // Short Entry with ADX filter
 // if not na(swing_low)
-if is_short and adx > adx_threshold
+if is_short //and adx > adx_threshold
     strategy.entry("Short", strategy.short, qty=short_contracts, stop=swing_low - syminfo.mintick, comment = "Short")
     strategy.exit("Short Exit", from_entry="Short", stop=short_stop, limit=short_take_profit, comment = "Long")
 
